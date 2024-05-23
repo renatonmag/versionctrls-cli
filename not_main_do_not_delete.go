@@ -181,7 +181,7 @@ func addSubmoduleWithGitCLI(repoPath, submodulePath, submoduleURL string) {
 	}
 }
 
-func main() {
+func notMain() {
 	// Replace these variables with your own values
 	localPath := "/home/rnm/Dev/versionctrls/gitcliexperiments/repotest"
 	// repoURL := "https://github.com/renatonmag/gitcliexperiments.git"

@@ -12,19 +12,23 @@ type model struct {
 	state       int
 	textInput   textinput.Model
 	initialized bool
+	apiKey      string
 	path        string
 	url         string
 }
 
 const (
 	stateInitMessage = iota
+	stateAskAPIKey
 	stateAskPath
 	stateAskURL
 )
 
+const secretFilePath = "apikey.txt"
+
 func initialModel() model {
 	ti := textinput.New()
-	ti.Placeholder = "Enter your repository path"
+	ti.Placeholder = ""
 	ti.Focus()
 	ti.CharLimit = 256
 	ti.Width = 30
@@ -48,6 +52,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			switch m.state {
 			case stateInitMessage:
+				m.state = stateAskAPIKey
+			case stateAskAPIKey:
+				m.apiKey = m.textInput.Value()
+				err := os.WriteFile(secretFilePath, []byte(m.apiKey), 0600)
+				if err != nil {
+					fmt.Println("Error saving API key:", err)
+					return m, tea.Quit
+				}
+				m.textInput.SetValue("")
+				m.textInput.Placeholder = "Your GitHub API key"
 				m.state = stateAskPath
 			case stateAskPath:
 				m.path = m.textInput.Value()
@@ -72,6 +86,11 @@ func (m model) View() string {
 	switch m.state {
 	case stateInitMessage:
 		return "Initializing Versionctrls repository.\n\nEnter to continue or q to quit."
+	case stateAskAPIKey:
+		return fmt.Sprintf(
+			"Enter your GitHub API Key:\n\n%s\n\n(Enter to confirm)\n",
+			m.textInput.View(),
+		)
 	case stateAskPath:
 		return fmt.Sprintf(
 			"Enter your local repository path:\n\n%s\n\n(Enter to confirm)\n",
@@ -89,7 +108,7 @@ func (m model) View() string {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: bubbletea-cli <command>")
+		fmt.Println("Usage: ctrls <command>")
 		os.Exit(1)
 	}
 
@@ -104,6 +123,12 @@ func main() {
 		}
 		finalModel := m.(model)
 		if finalModel.initialized {
+			apiKey, err := os.ReadFile(secretFilePath)
+			if err != nil {
+				fmt.Println("Error reading API key:", err)
+			} else {
+				fmt.Printf("API Key: %s\n", string(apiKey))
+			}
 			fmt.Printf("\nVersionctrls initialized at: %s\n", finalModel.path)
 			fmt.Printf("\nJust hit ctrl+s to and that's it. Your files are versioned.")
 		}
