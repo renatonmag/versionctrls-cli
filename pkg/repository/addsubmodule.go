@@ -7,7 +7,7 @@ import (
 
 func (r Repository) AddSubmodule(url, path string) error {
 	fmt.Println("Adding submodule...")
-	output, err := r.RunGitCommand("submodule", "add", url, path)
+	output, err := r.RunGitCommand("submodule", "add", "--force", url, path)
 	if err != nil {
 		log.Fatalf("Error: %v\nOutput: %s", err, output)
 		return err

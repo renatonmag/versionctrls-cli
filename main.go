@@ -184,6 +184,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -199,8 +200,8 @@ var (
 	cursorStyle  = focusedStyle.Copy()
 	noStyle      = lipgloss.NewStyle()
 
-	focusedButton = focusedStyle.Copy().Render("[ Submit ]")
-	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
+	focusedButton = focusedStyle.Copy().Render("[ Initialize ]")
+	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Initialize"))
 )
 
 const (
@@ -359,7 +360,88 @@ func main() {
 
 	cmd := os.Args[1]
 
-	if cmd == "copy" {
+	if cmd == "commitchanges" {
+		repo := repository.New()
+		err := repo.PlainOpen(".")
+		if err != nil {
+			fmt.Println("You are not in a Git repository.")
+			return
+		}
+		repo.CreateEmptyBranchesForChangedFiles()
+		vPath, err := repo.IntegrationSubmodulePath()
+		if err != nil {
+			log.Fatalf("Error getting integration submodule path: %v", err)
+		}
+		fmt.Printf("Integration submodule path: %s\n", vPath)
+		vRepo := repository.New()
+		err = vRepo.PlainOpen(vPath)
+		if err != nil {
+			log.Fatalf("Error opening integration submodule: %v", err)
+		}
+		err = vRepo.CreateEmptyBranchesForChangedFiles()
+		if err != nil {
+			log.Fatalf("Error creating empty branches in integration submodule: %v", err)
+		}
+
+		err = vRepo.CommitChangedFiles()
+		if err != nil {
+			log.Fatalf("Error committing changes in integration submodule: %v", err)
+		}
+
+	} else if cmd == "userinfo" {
+		repo := repository.New()
+		err := repo.PlainOpen(".")
+		if err != nil {
+			fmt.Println("You are not in a Git repository.")
+			return
+		}
+		name, email, err := repo.GetGitUserInfo()
+		if err != nil {
+			log.Fatalf("Error getting Git user info: %v", err)
+		}
+
+		fmt.Printf("Git user name: %s\n", name)
+		fmt.Printf("Git user email: %s\n", email)
+	} else if cmd == "changes" {
+		repo := repository.New()
+		err := repo.PlainOpen(".")
+		if err != nil {
+			fmt.Println("You are not in a Git repository.")
+			return
+		}
+
+		files, err := repo.GetChangedFiles()
+		if err != nil {
+			fmt.Println("Error getting changed files:", err)
+			return
+		}
+		fmt.Println("Files in root:")
+		for _, entry := range files {
+			fmt.Println(entry)
+		}
+
+		vPath, err := repo.IntegrationSubmodulePath()
+		if err != nil {
+			log.Fatalf("Error getting integration submodule path: %v", err)
+		}
+
+		vRepo := repository.New()
+		err = vRepo.PlainOpen(vPath)
+		if err != nil {
+			log.Fatalf("Error opening integration submodule: %v", err)
+		}
+
+		files, err = vRepo.GetChangedFiles()
+		if err != nil {
+			fmt.Println("Error getting changed files:", err)
+			return
+		}
+		fmt.Println("\n\nFiles in integration:")
+		for _, entry := range files {
+			fmt.Println(entry)
+		}
+
+	} else if cmd == "copy" {
 		repo := repository.New()
 		err := repo.PlainOpen(".")
 		if err != nil {
@@ -380,6 +462,18 @@ func main() {
 		err = repo.CopyChangedFilesToSubmodule()
 		if err != nil {
 			fmt.Println("Error copying files to submodule:", err)
+			return
+		}
+	} else if cmd == "removesub" {
+		repo := repository.New()
+		err := repo.PlainOpen(".")
+		if err != nil {
+			fmt.Println("You are not in a Git repository.")
+			return
+		}
+		err = repo.RemoveSubmodule()
+		if err != nil {
+			fmt.Println("Error removing submodule:", err)
 			return
 		}
 	} else if cmd == "init" {
