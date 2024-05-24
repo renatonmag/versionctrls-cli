@@ -8,7 +8,7 @@ import (
 	"github.com/renatonmag/versionctrls-cli/pkg/utils"
 )
 
-const maxFileSize = 500 * 1024 // 500KB in bytes
+const maxFileSize = 1000 * 1024 // 1mb in bytes
 
 // CopyChangedFilesToSubmodule copies all changed files from the root repository to the submodule
 func (r Repository) CopyChangedFilesToSubmodule() error {
