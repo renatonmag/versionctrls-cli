@@ -1,12 +1,21 @@
 package repository
 
-import "github.com/go-git/go-git/v5/plumbing"
+import (
+	"github.com/go-git/go-git/v5/plumbing"
+)
 
-// BranchExists checks if a branch already exists in the repository
+// branchExists checks if a branch with the given name exists in the repository.
 func (r *Repository) BranchExists(branchName string) (bool, error) {
-	_, err := r.repo.Reference(plumbing.NewBranchReferenceName(branchName), true)
-	if err == plumbing.ErrReferenceNotFound {
-		return false, nil
+	// Get the reference name for the branch.
+	refName := plumbing.NewBranchReferenceName(branchName)
+
+	// Try to get the reference.
+	_, err := r.repo.Reference(refName, false)
+	if err != nil {
+		if err == plumbing.ErrReferenceNotFound {
+			return false, nil
+		}
+		return false, err
 	}
-	return err == nil, err
+	return true, nil
 }

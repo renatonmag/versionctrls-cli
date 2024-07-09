@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"log"
 	"path/filepath"
 	"strings"
 )
@@ -16,8 +17,9 @@ func (r Repository) CreateEmptyBranchesForChangedFiles() error {
 		// Replace path separators with a character allowed in branch names (e.g., "-")
 		branchName := strings.ReplaceAll(file, string(filepath.Separator), "-")
 
-		err := r.CreateEmptyBranch(branchName)
+		err := r.CreateEmptyBranch2(branchName)
 		if err != nil {
+			log.Printf("Failed to create branch %s: %s\n", branchName, err)
 			return err
 		}
 	}
