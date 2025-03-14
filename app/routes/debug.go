@@ -1,8 +1,11 @@
 package routes
 
 import (
-	"sourcectrls/pkg/fs"
-	"sourcectrls/pkg/git"
+	"log"
+
+	"github.com/helshabini/fsbroker"
+	"github.com/renatonmag/version-ctrls-cli/pkg/fs"
+	"github.com/renatonmag/version-ctrls-cli/pkg/git"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -177,7 +180,8 @@ func syncDirs(c *fiber.Ctx) error {
 }
 
 type WatchDirRequest struct {
-	Path string `json:"path"`
+	Path   string `json:"path"`
+	Ignore string `json:"ignore"`
 }
 
 func watchDir(c *fiber.Ctx) error {
@@ -185,13 +189,26 @@ func watchDir(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 	}
-	watcher, err := fs.NewFsWatcher()
+	config := fsbroker.DefaultFSConfig()
+	config.IgnorePath = request.Ignore
+	broker, err := fsbroker.NewFSBroker(config)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+		log.Fatalf("error creating FS Broker: %v", err)
 	}
-	err = watcher.WatchDir(request.Path)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	defer broker.Stop()
+
+	if err := broker.AddRecursiveWatch(request.Path); err != nil {
+		log.Printf("error adding watch: %v", err)
 	}
-	return c.SendString("Directory watched")
+
+	broker.Start()
+
+	for {
+		select {
+		case event := <-broker.Next():
+			log.Printf("fs event has occurred: type=%s, path=%s, timestamp=%s, properties=%v", event.Type.String(), event.Path, event.Timestamp, event.Properties)
+		case error := <-broker.Error():
+			log.Printf("an error has occurred: %v", error)
+		}
+	}
 }

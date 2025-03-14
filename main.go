@@ -1,7 +1,7 @@
 package main
 
 import (
-	"sourcectrls/app/routes"
+	"github.com/renatonmag/version-ctrls-cli/app/routes"
 
 	"github.com/gofiber/fiber/v2"
 )
