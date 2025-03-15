@@ -23,6 +23,13 @@ type IgnoreService struct {
 }
 
 func NewFsService(ignorePath string) *FsService {
+	if ignorePath == "" {
+		return &FsService{
+			Replicate: &ReplicateDir{
+				ignore: nil,
+			},
+		}
+	}
 	return &FsService{
 		Replicate: &ReplicateDir{
 			ignore: NewIgnoreService(ignorePath),
@@ -63,24 +70,24 @@ type ReplicateDir struct {
 	ignore *IgnoreService
 }
 
-func (r *ReplicateDir) SyncDirs(src, dst string) error {
-	diffs, err := r.DiffDirs(src, dst)
-	if err != nil {
-		return err
-	}
+// func (r *ReplicateDir) SyncDirs(src, dst string) error {
+// 	diffs, err := r.DiffDirs(src, dst)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = r.CreateHardlinks(diffs[src], dst)
-	if err != nil {
-		return err
-	}
+// 	err = r.CreateHardlinks(diffs[src], dst)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = r.CleanFiles(diffs[dst], dst)
-	if err != nil {
-		return err
-	}
+// 	err = r.CleanFiles(diffs[dst], dst)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (r *ReplicateDir) CleanFiles(paths []string, dst string) error {
 	for _, path := range paths {
@@ -93,72 +100,91 @@ func (r *ReplicateDir) CleanFiles(paths []string, dst string) error {
 	return nil
 }
 
-func (r *ReplicateDir) CreateHardlinks(paths []string, dst string) error {
-	for _, path := range paths {
-		// Get file info
-		info, err := os.Stat(path)
-		if err != nil {
-			return err
-		}
-
-		destPath := filepath.Join(dst, path)
-
-		if info.IsDir() {
-			// Create the directory structure
-			if err := os.MkdirAll(destPath, 0755); err != nil {
-				return err
-			}
-		} else {
-			// Create parent directories if they don't exist
-			if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-				return err
-			}
-			// For files, create a hard link
-			if err := os.Link(path, destPath); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// // CleanDirectory removes all contents of a directory except for items in the ignore list.
-// // The directory itself is preserved. Items in the ignore slice are directory or file names
-// // (not paths) that should be preserved.
-// func (r *ReplicateDir) CleanDirectory(dir string, ignore []string) error {
-// 	// Create a map for faster lookups of ignored items
-// 	ignoreMap := make(map[string]bool)
-// 	for _, item := range ignore {
-// 		ignoreMap[item] = true
-// 	}
-
-// 	// Read directory contents
-// 	entries, err := os.ReadDir(dir)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to read directory: %w", err)
-// 	}
-
-// 	// Process each entry
-// 	for _, entry := range entries {
-// 		name := entry.Name()
-
-// 		// Skip if in ignore list
-// 		if ignoreMap[name] {
-// 			continue
+// func (r *ReplicateDir) CreateHardlinks(paths []string, dst string) error {
+// 	for _, path := range paths {
+// 		// Get file info
+// 		info, err := os.Stat(path)
+// 		if err != nil {
+// 			return err
 // 		}
 
-// 		// Build full path
-// 		path := filepath.Join(dir, name)
+// 		destPath := filepath.Join(dst, path)
 
-// 		// Remove the item (recursively if it's a directory)
-// 		if err := os.RemoveAll(path); err != nil {
-// 			return fmt.Errorf("failed to remove %s: %w", path, err)
+// 		if info.IsDir() {
+// 			// Create the directory structure
+// 			if err := os.MkdirAll(destPath, 0755); err != nil {
+// 				return err
+// 			}
+// 		} else {
+// 			// Create parent directories if they don't exist
+// 			if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+// 				return err
+// 			}
+// 			// For files, create a hard link
+// 			if err := os.Link(path, destPath); err != nil {
+// 				return err
+// 			}
 // 		}
 // 	}
 
 // 	return nil
 // }
+
+func (r *ReplicateDir) CreateHardlink(path, dst string) error {
+	// Get file info
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	// Get the last part of the path (filename)
+	filename := filepath.Base(path)
+	destPath := filepath.Join(dst, filename)
+
+	if info.IsDir() {
+		return fmt.Errorf("cannot create hardlink for directory: %s", path)
+	}
+
+	// For files, create a hard link
+	if err := os.Link(path, destPath); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CleanWorkingTree removes all contents of a directory except for items in the ignore list.
+// The directory itself is preserved. Items in the ignore slice are directory or file names
+// (not paths) that should be preserved.
+func (r *ReplicateDir) CleanWorkingTree(dir string) error {
+
+	dotgit := ".git"
+
+	// Read directory contents
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	// Process each entry
+	for _, entry := range entries {
+		name := entry.Name()
+
+		// Skip if in ignore list
+		if name == dotgit {
+			continue
+		}
+
+		// Build full path
+		path := filepath.Join(dir, name)
+
+		// Remove the item (recursively if it's a directory)
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("failed to remove %s: %w", path, err)
+		}
+	}
+
+	return nil
+}
 
 type FileMeta struct {
 	Size int64

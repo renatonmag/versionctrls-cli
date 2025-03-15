@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -12,15 +13,29 @@ import (
 
 // Repository wraps a go-git repository
 type Repository struct {
-	repo *git.Repository
-	path string
+	repo           *git.Repository
+	Path           string
+	MainRepoBranch string
 }
 
 // NewRepository creates a new Repository instance
-func NewRepository(path string) *Repository {
-	return &Repository{
-		path: path,
+func NewRepository(path string) (*Repository, error) {
+	parentRepoPath := GetParentRepoPath(path)
+	if parentRepoPath == "" {
+		return nil, fmt.Errorf("no parent git repository found")
 	}
+	fileContent, err := os.ReadFile(filepath.Join(parentRepoPath, ".git", "HEAD"))
+	if err != nil {
+		return nil, fmt.Errorf("error reading file %s: %w", path, err)
+	}
+	return &Repository{
+		Path:           path,
+		MainRepoBranch: GetLongName(string(fileContent)),
+	}, nil
+}
+
+func (repo *Repository) SetMainRepoBranch(branch string) {
+	repo.MainRepoBranch = GetLongName(branch)
 }
 
 // InitRepository initializes a new git repository at the specified path.
@@ -47,7 +62,7 @@ func RemoveDirectory(path string) error {
 // Open opens a git repository at the specified path.
 // Returns an error if the opening fails.
 func (repo *Repository) Open() error {
-	repository, err := git.PlainOpen(repo.path)
+	repository, err := git.PlainOpen(repo.Path)
 	if err != nil {
 		return fmt.Errorf("failed to open git repository: %w", err)
 	}
@@ -57,37 +72,32 @@ func (repo *Repository) Open() error {
 
 // CreateBranch creates a new branch with the given name.
 // Returns an error if the creation fails.
-func (repo *Repository) CreateBranch(branchName string) error {
+func (repo *Repository) CreateBranch(branchName string, srcBranch string) error {
+	// Get the HEAD reference
+	headRef, err := repo.repo.Head()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD reference: %w", err)
+	}
+	commitHash := headRef.Hash()
+
+	// If a source branch is specified, use its commit instead of HEAD
+	if srcBranch != "" {
+		fromBranchRefName := plumbing.NewBranchReferenceName(srcBranch)
+		fromBranchRef, err := repo.repo.Reference(fromBranchRefName, true)
+		if err != nil {
+			return fmt.Errorf("failed to get source branch reference: %w", err)
+		}
+		commitHash = fromBranchRef.Hash()
+	}
 	newBranchRefName := plumbing.NewBranchReferenceName(branchName)
-
-	// Get the worktree
-	worktree, err := repo.repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-
-	// Create an empty commit
-	commitHash, err := worktree.Commit("Initial empty commit", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "AutoCommit",
-			Email: "autocommit@example.com",
-			When:  time.Now(),
-		},
-		AllowEmptyCommits: true,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create an empty commit: %w", err)
-	}
 
 	// Create a new reference pointing to the empty commit
 	newBranchRef := plumbing.NewHashReference(newBranchRefName, commitHash)
 
 	// Check if the branch already exists
-	_, err = repo.repo.Reference(newBranchRefName, false)
-	if err == nil {
+	exists := repo.BranchExists(branchName)
+	if exists {
 		return fmt.Errorf("branch '%s' already exists", branchName)
-	} else if err != plumbing.ErrReferenceNotFound {
-		return fmt.Errorf("failed to check if branch exists: %w", err)
 	}
 
 	// Save the new branch reference to the repository's storage
@@ -118,6 +128,22 @@ func (repo *Repository) DeleteBranch(branchName string) error {
 		return fmt.Errorf("failed to delete branch '%s': %w", branchName, err)
 	}
 
+	return nil
+}
+
+func (repo *Repository) CheckoutBranch(branchRef string) error {
+	branchRefName := plumbing.NewBranchReferenceName(branchRef)
+	wt, err := repo.repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+	err = wt.Checkout(&git.CheckoutOptions{
+		Branch: branchRefName,
+		Force:  true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to checkout branch '%s': %w", branchRef, err)
+	}
 	return nil
 }
 
@@ -168,4 +194,71 @@ func (repo *Repository) CommitToBranch(branchName, filePath, commitMessage strin
 	}
 
 	return commitHash.String(), nil
+}
+
+// CommitToBranch creates a commit on the specified branch without checking it out.
+// It adds the specified file to the commit.
+// Returns the commit hash as a string or an error if the operation fails.
+func (repo *Repository) CommitAll(branchName, commitMessage string) (string, error) {
+	// Check if the branch is currently checked out
+	headRef, err := repo.repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD reference: %w", err)
+	}
+
+	// Get the current branch name
+	currentBranch := headRef.Name().Short()
+
+	// Check if we're trying to commit to the currently checked out branch
+	fmt.Println("headRef", headRef)
+	fmt.Println("branchName", branchName)
+	fmt.Println("currentBranch", currentBranch)
+	if currentBranch != branchName {
+		return "", fmt.Errorf("cannot commit to branch '%s' because branch '%s' is currently checked out", branchName, currentBranch)
+	}
+	// Get the branch reference
+	branchRefName := plumbing.NewBranchReferenceName(branchName)
+	branchRef, err := repo.repo.Reference(branchRefName, true)
+	if err != nil {
+		return "", fmt.Errorf("failed to get branch reference: %w", err)
+	}
+
+	// Get the worktree
+	worktree, err := repo.repo.Worktree()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	// Add all changes to the staging area
+	if err := worktree.AddWithOptions(&git.AddOptions{
+		All: true,
+	}); err != nil {
+		return "", fmt.Errorf("failed to add all changes to staging area: %w", err)
+	}
+
+	// Create the commit
+	commitOptions := &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "AutoCommit",
+			Email: "autocommit@example.com",
+			When:  time.Now(),
+		},
+		Parents: []plumbing.Hash{branchRef.Hash()},
+	}
+
+	// Commit to the branch
+	commitHash, err := worktree.Commit(commitMessage, commitOptions)
+	if err != nil {
+		return "", fmt.Errorf("failed to commit to branch '%s': %w", branchName, err)
+	}
+
+	return commitHash.String(), nil
+}
+
+// BranchExists checks if a branch with the given name exists in the repository.
+// Returns true if the branch exists, false otherwise.
+func (repo *Repository) BranchExists(branchName string) bool {
+	branchRefName := plumbing.NewBranchReferenceName(branchName)
+	_, err := repo.repo.Reference(branchRefName, false)
+	return err == nil
 }
