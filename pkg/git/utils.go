@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// GetShortName returns the short name of a git reference
+// Returns an empty string if the reference is not a branch
 func GetShortName(ref_str string) string {
 	ref := strings.TrimSpace(ref_str)
 	if strings.HasPrefix(ref, "refs/heads/") {

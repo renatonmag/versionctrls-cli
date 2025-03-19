@@ -17,4 +17,5 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/watch-dir", watchDir)
 	app.Post("/detect-checkout", detectCheckout)
 	app.Post("/commit-file-on-change", commitFileOnChange)
+	app.Post("/remove-file", removeFile)
 }

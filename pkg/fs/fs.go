@@ -149,6 +149,10 @@ func (r *ReplicateDir) CreateHardlink(path, dst string) error {
 	if err := os.Link(path, destPath); err != nil {
 		return err
 	}
+	chmod := os.Chmod(destPath, info.Mode())
+	if chmod != nil {
+		return chmod
+	}
 	return nil
 }
 
