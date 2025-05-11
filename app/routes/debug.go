@@ -173,17 +173,18 @@ func commitFileOnChange(c *fiber.Ctx) error {
 		case event := <-broker.Next():
 			if event.Type == fsbroker.Create {
 				git.OnCreate(_repo, event)
+				log.Print("Create")
 			}
 
-			// if event.Type == fsbroker.Modify {
-			// 	git.OnModify(_repo, event)
-			// }
+			if event.Type == fsbroker.Modify {
+				git.OnModify(_repo, event)
+			}
 
 			if event.Type == fsbroker.Move {
-				log.Print("Move")
+				git.OnMove(_repo, event)
 			}
 			if event.Type == fsbroker.Remove {
-				git.OnRemove(_repo, event)
+				// git.OnRemove(_repo, event)
 
 				if event.Path == request.Head {
 					if err := broker.AddWatch(request.Head); err != nil {
@@ -266,6 +267,32 @@ func detectCheckout(c *fiber.Ctx) error {
 			log.Printf("an error has occurred: %v", error)
 		}
 	}
+}
+
+type RenameBranchRequest struct {
+	Path      string `json:"path"`
+	Branch    string `json:"branch"`
+	NewBranch string `json:"newBranch"`
+}
+
+func renameBranch(c *fiber.Ctx) error {
+	var request RenameBranchRequest
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
+	}
+	repo, err := git.NewRepository(request.Path)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.Open()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.RenameBranch(request.Branch, request.NewBranch)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	return c.SendString("Branch renamed")
 }
 
 type FileMapRequest struct {

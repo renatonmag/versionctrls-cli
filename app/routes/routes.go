@@ -18,4 +18,5 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/detect-checkout", detectCheckout)
 	app.Post("/commit-file-on-change", commitFileOnChange)
 	app.Post("/remove-file", removeFile)
+	app.Post("/rename-branch", renameBranch)
 }

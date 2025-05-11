@@ -131,6 +131,48 @@ func (repo *Repository) DeleteBranch(branchName string) error {
 	return nil
 }
 
+// RenameBranch renames a branch from oldName to newName.
+// Returns an error if the source branch doesn't exist, the target branch already exists, or the operation fails.
+func (repo *Repository) RenameBranch(oldName, newName string) error {
+	err := repo.CheckoutBranch("master")
+	if err != nil {
+		return fmt.Errorf("failed to checkout branch '%s': %w", oldName, err)
+	}
+
+	oldRefName := plumbing.NewBranchReferenceName(oldName)
+	newRefName := plumbing.NewBranchReferenceName(newName)
+
+	// Check if the old branch exists
+	oldRef, err := repo.repo.Reference(oldRefName, false)
+	if err != nil {
+		if err == plumbing.ErrReferenceNotFound {
+			return fmt.Errorf("branch '%s' does not exist", oldName)
+		}
+		return fmt.Errorf("failed to get old branch reference: %w", err)
+	}
+
+	// Check if the new branch already exists
+	_, err = repo.repo.Reference(newRefName, false)
+	if err == nil {
+		return fmt.Errorf("branch '%s' already exists", newName)
+	} else if err != plumbing.ErrReferenceNotFound {
+		return fmt.Errorf("failed to check new branch reference: %w", err)
+	}
+
+	// Create the new branch reference
+	newRef := plumbing.NewHashReference(newRefName, oldRef.Hash())
+	if err := repo.repo.Storer.SetReference(newRef); err != nil {
+		return fmt.Errorf("failed to create new branch reference: %w", err)
+	}
+
+	// Remove the old branch reference
+	if err := repo.repo.Storer.RemoveReference(oldRefName); err != nil {
+		return fmt.Errorf("failed to remove old branch reference: %w", err)
+	}
+
+	return nil
+}
+
 func (repo *Repository) CheckoutBranch(branchRef string) error {
 	branchRefName := plumbing.NewBranchReferenceName(branchRef)
 	wt, err := repo.repo.Worktree()
@@ -150,7 +192,7 @@ func (repo *Repository) CheckoutBranch(branchRef string) error {
 // CommitToBranch creates a commit on the specified branch without checking it out.
 // It adds the specified file to the commit.
 // Returns the commit hash as a string or an error if the operation fails.
-func (repo *Repository) CommitToBranch(branchName, filePath, commitMessage string) (string, error) {
+func (repo *Repository) CommitToBranch(branchName, filePath, commitMessage string, empty bool) (string, error) {
 	// Get the branch reference
 	branchRefName := plumbing.NewBranchReferenceName(branchName)
 	branchRef, err := repo.repo.Reference(branchRefName, true)
@@ -178,7 +220,8 @@ func (repo *Repository) CommitToBranch(branchName, filePath, commitMessage strin
 			Email: "autocommit@example.com",
 			When:  time.Now(),
 		},
-		Parents: []plumbing.Hash{branchRef.Hash()},
+		Parents:           []plumbing.Hash{branchRef.Hash()},
+		AllowEmptyCommits: empty,
 	}
 
 	// Commit to the branch
