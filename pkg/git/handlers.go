@@ -10,8 +10,7 @@ import (
 )
 
 func OnCreate(repo *Repository, event *fsbroker.FSEvent) error {
-	mainRepoBranch := repo.MainRepoBranch
-	branchName := getBranchName(mainRepoBranch, event.Path)
+	branchName := getBranchName(event.Path)
 	fmt.Println("Create: ", branchName)
 
 	exists := repo.BranchExists(branchName)
@@ -55,8 +54,7 @@ func OnCreate(repo *Repository, event *fsbroker.FSEvent) error {
 
 func OnRemove(repo *Repository, event *fsbroker.FSEvent) error {
 	file := filepath.Base(event.Path)
-	mainRepoBranch := repo.MainRepoBranch
-	branchName := getBranchName(mainRepoBranch, event.Path)
+	branchName := getBranchName(event.Path)
 
 	exists := repo.BranchExists(branchName)
 	if !exists {
@@ -79,8 +77,7 @@ func OnRemove(repo *Repository, event *fsbroker.FSEvent) error {
 }
 
 func OnModify(repo *Repository, event *fsbroker.FSEvent) error {
-	mainRepoBranch := repo.MainRepoBranch
-	branchName := getBranchName(mainRepoBranch, event.Path)
+	branchName := getBranchName(event.Path)
 	exists := repo.BranchExists(branchName)
 	if !exists {
 		err := OnCreate(repo, event)
@@ -162,10 +159,9 @@ func OnModify(repo *Repository, event *fsbroker.FSEvent) error {
 // }
 
 func OnMove(repo *Repository, event *fsbroker.FSEvent) error {
-	mainRepoBranch := repo.MainRepoBranch
 	oldPath := event.Properties["OldPath"]
-	branchName := getBranchName(mainRepoBranch, oldPath)
-	newBranchName := getBranchName(mainRepoBranch, event.Path)
+	branchName := getBranchName(oldPath)
+	newBranchName := getBranchName(event.Path)
 	exists := repo.BranchExists(branchName)
 	if exists {
 		err := repo.RenameBranch(branchName, newBranchName)

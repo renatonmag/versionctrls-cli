@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -304,4 +305,67 @@ func (repo *Repository) BranchExists(branchName string) bool {
 	branchRefName := plumbing.NewBranchReferenceName(branchName)
 	_, err := repo.repo.Reference(branchRefName, false)
 	return err == nil
+}
+
+func (repo *Repository) Push(remoteName string) error {
+	if repo.repo == nil {
+		return fmt.Errorf("repository is not open")
+	}
+	err := repo.repo.Push(&git.PushOptions{
+		RemoteName: remoteName,
+	})
+	if err != nil {
+		if err == git.NoErrAlreadyUpToDate {
+			return nil // Not an error, just nothing to push
+		}
+		return fmt.Errorf("failed to push to remote '%s': %w", remoteName, err)
+	}
+	return nil
+}
+
+// AddRemote adds a new remote to the repository with the given name and URL.
+// Returns an error if the remote already exists or if the operation fails.
+func (repo *Repository) AddRemote(name, url string) error {
+	if repo.repo == nil {
+		return fmt.Errorf("repository is not open")
+	}
+	_, err := repo.repo.CreateRemote(&config.RemoteConfig{
+		Name: name,
+		URLs: []string{url},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add remote '%s': %w", name, err)
+	}
+	return nil
+}
+
+// UpdateRemote updates the URL of an existing remote.
+func (repo *Repository) UpdateRemote(name, newURL string) error {
+	if repo.repo == nil {
+		return fmt.Errorf("repository is not open")
+	}
+	err := repo.repo.DeleteRemote(name)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing remote '%s': %w", name, err)
+	}
+	_, err = repo.repo.CreateRemote(&config.RemoteConfig{
+		Name: name,
+		URLs: []string{newURL},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add remote '%s' with new URL: %w", name, err)
+	}
+	return nil
+}
+
+// RemoveRemote removes a remote from the repository.
+func (repo *Repository) RemoveRemote(name string) error {
+	if repo.repo == nil {
+		return fmt.Errorf("repository is not open")
+	}
+	err := repo.repo.DeleteRemote(name)
+	if err != nil {
+		return fmt.Errorf("failed to remove remote '%s': %w", name, err)
+	}
+	return nil
 }

@@ -72,8 +72,8 @@ func fileExists(path string) bool {
 	return false
 }
 
-func getBranchName(mainRepoBranch string, path string) string {
-	return fmt.Sprintf("{%s}/{%s}", strings.ReplaceAll(GetShortName(mainRepoBranch), "/", "---"), strings.ReplaceAll(path, "/", "---"))
+func getBranchName(path string) string {
+	return fmt.Sprintf("{%s}", strings.ReplaceAll(path, "/", "&#x2F;"))
 }
 
 // func replaceHardLink(repo *Repository, event *fsbroker.FSEvent) {
