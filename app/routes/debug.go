@@ -173,7 +173,6 @@ func commitFileOnChange(c *fiber.Ctx) error {
 		case event := <-broker.Next():
 			if event.Type == fsbroker.Create {
 				git.OnCreate(_repo, event)
-				log.Print("Create")
 			}
 
 			if event.Type == fsbroker.Modify {
@@ -390,4 +389,81 @@ func removeFile(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 	return c.SendString("File removed")
+}
+
+type AddRemoteRequest struct {
+	Path   string `json:"path"`
+	Remote string `json:"remote"`
+	URL    string `json:"url"`
+}
+
+func addRemote(c *fiber.Ctx) error {
+	var request AddRemoteRequest
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
+	}
+	repo, err := git.NewRepository(request.Path)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.Open()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.AddRemote(request.Remote, request.URL)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	return c.SendString("Remote added")
+}
+
+type UpdateRemoteRequest struct {
+	Path   string `json:"path"`
+	Remote string `json:"remote"`
+	URL    string `json:"url"`
+}
+
+func updateRemote(c *fiber.Ctx) error {
+	var request UpdateRemoteRequest
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
+	}
+	repo, err := git.NewRepository(request.Path)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.Open()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.UpdateRemote(request.Remote, request.URL)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	return c.SendString("Remote updated")
+}
+
+type PushRequest struct {
+	Path   string `json:"path"`
+	Remote string `json:"remote"`
+}
+
+func push(c *fiber.Ctx) error {
+	var request PushRequest
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
+	}
+	repo, err := git.NewRepository(request.Path)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.Open()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	err = repo.Push(request.Remote)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	return c.SendString("Pushed")
 }

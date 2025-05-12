@@ -19,4 +19,7 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/commit-file-on-change", commitFileOnChange)
 	app.Post("/remove-file", removeFile)
 	app.Post("/rename-branch", renameBranch)
+	app.Post("/add-remote", addRemote)
+	app.Post("/update-remote", updateRemote)
+	app.Post("/push", push)
 }
