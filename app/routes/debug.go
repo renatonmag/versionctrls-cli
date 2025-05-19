@@ -5,13 +5,14 @@ import (
 	"os"
 
 	"github.com/helshabini/fsbroker"
+	"github.com/renatonmag/version-ctrls-cli/pkg/config"
 	"github.com/renatonmag/version-ctrls-cli/pkg/fs"
 	"github.com/renatonmag/version-ctrls-cli/pkg/git"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-var _repo *git.Repository
+var _repo *git.LocalRepository
 
 type InitRepoRequest struct {
 	Path string `json:"path"`
@@ -113,7 +114,7 @@ func cleanDirectory(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 	}
-	err := fs.NewFsService("").Replicate.CleanWorkingTree(request.Path)
+	err := fs.NewFsService().Replicate.CleanWorkingTree(request.Path)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -216,7 +217,7 @@ func diffDirs(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 	}
-	result, err := fs.NewFsService(request.Ignore).Replicate.DiffDirs(request.Dir1, request.Dir2)
+	result, err := fs.NewFsService().Replicate.DiffDirs(request.Dir1, request.Dir2)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -304,7 +305,7 @@ func fileMap(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 	}
-	fileMap, err := fs.NewFsService(request.Ignore).Replicate.BuildFileMap(request.Path)
+	fileMap, err := fs.NewFsService().Replicate.BuildFileMap(request.Path)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -321,7 +322,7 @@ func getIgnoreService(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 	}
-	ignoreService := fs.NewIgnoreService(request.Path)
+	ignoreService := fs.NewIgnoreService()
 	return c.JSON(ignoreService.MatchesPath(request.File))
 }
 
@@ -466,4 +467,16 @@ func push(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 	return c.SendString("Pushed")
+}
+
+type GetConfigRequest struct {
+	Path string `json:"path"`
+}
+
+func getConfig(c *fiber.Ctx) error {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	return c.JSON(cfg)
 }

@@ -7,13 +7,24 @@ import (
 
 	"github.com/helshabini/fsbroker"
 	"github.com/renatonmag/version-ctrls-cli/pkg/fs"
+	"github.com/renatonmag/version-ctrls-cli/pkg/utils"
 )
 
-func OnCreate(repo *Repository, event *fsbroker.FSEvent) error {
+func OnCreate(repo *LocalRepository, event *fsbroker.FSEvent) error {
 	branchName := getBranchName(event.Path)
-	fmt.Println("Create: ", branchName)
-
 	exists := repo.BranchExists(branchName)
+	max_file_size := repo.appConfig.Integration.MaxFileSize
+	integrationPath := repo.appConfig.Integration.Path
+	gitignorePath := fs.GetFile(integrationPath, ".gitignore")
+	if fs.IsFileTooLarge(event.Path, max_file_size) && !exists {
+		fmt.Printf("file %s is too large, skipping\n", event.Path)
+		fmt.Printf("Adding to ignore list\n")
+		fs.AppendToGitignore(gitignorePath, event.Path)
+		return nil
+	} else if exists, _ := fs.LineExistsInFile(gitignorePath, event.Path); exists {
+		fs.RemoveLineFromFile(gitignorePath, event.Path)
+	}
+
 	if !exists {
 		err := repo.CreateBranch(branchName, "master")
 		if err != nil {
@@ -28,7 +39,7 @@ func OnCreate(repo *Repository, event *fsbroker.FSEvent) error {
 	baseFilePath := filepath.Join("base", event.Path)
 	_fileToCreateAtRepo := filepath.Join(repo.Path, baseFilePath)
 	_dirPath := filepath.Dir(_fileToCreateAtRepo)
-	exists = directoryExists(_fileToCreateAtRepo)
+	exists = utils.DirectoryExists(_fileToCreateAtRepo)
 	if !exists {
 		fmt.Println("directory does not exist, creating it")
 		err = os.MkdirAll(_dirPath, 0755)
@@ -37,7 +48,7 @@ func OnCreate(repo *Repository, event *fsbroker.FSEvent) error {
 		}
 	}
 
-	err = fs.NewFsService("").Replicate.CreateHardlink(event.Path, _dirPath)
+	err = fs.NewFsService().Replicate.CreateHardlink(event.Path, _dirPath)
 	if err != nil {
 		fmt.Println("error creating hardlink: ", err)
 		return err
@@ -52,7 +63,7 @@ func OnCreate(repo *Repository, event *fsbroker.FSEvent) error {
 	return nil
 }
 
-func OnRemove(repo *Repository, event *fsbroker.FSEvent) error {
+func OnRemove(repo *LocalRepository, event *fsbroker.FSEvent) error {
 	file := filepath.Base(event.Path)
 	branchName := getBranchName(event.Path)
 
@@ -76,7 +87,7 @@ func OnRemove(repo *Repository, event *fsbroker.FSEvent) error {
 	return nil
 }
 
-func OnModify(repo *Repository, event *fsbroker.FSEvent) error {
+func OnModify(repo *LocalRepository, event *fsbroker.FSEvent) error {
 	branchName := getBranchName(event.Path)
 	exists := repo.BranchExists(branchName)
 	if !exists {
@@ -113,7 +124,7 @@ func OnModify(repo *Repository, event *fsbroker.FSEvent) error {
 			return err
 		}
 
-		exists = directoryExists(_fileToCreateAtRepo)
+		exists = utils.DirectoryExists(_fileToCreateAtRepo)
 		if !exists {
 			fmt.Println("directory does not exist, creating it")
 			err = os.MkdirAll(_dirPath, 0755)
@@ -122,13 +133,13 @@ func OnModify(repo *Repository, event *fsbroker.FSEvent) error {
 			}
 		}
 
-		if fileExists(_fileToCreateAtRepo) {
+		if utils.FileExists(_fileToCreateAtRepo) {
 			err := os.Remove(_fileToCreateAtRepo)
 			if err != nil {
 				return err
 			}
 		}
-		err = fs.NewFsService("").Replicate.CreateHardlink(event.Path, _dirPath)
+		err = fs.NewFsService().Replicate.CreateHardlink(event.Path, _dirPath)
 		if err != nil {
 			fmt.Println("error creating hardlink: ", err)
 			return err
@@ -158,7 +169,7 @@ func OnModify(repo *Repository, event *fsbroker.FSEvent) error {
 
 // }
 
-func OnMove(repo *Repository, event *fsbroker.FSEvent) error {
+func OnMove(repo *LocalRepository, event *fsbroker.FSEvent) error {
 	oldPath := event.Properties["OldPath"]
 	branchName := getBranchName(oldPath)
 	newBranchName := getBranchName(event.Path)
@@ -192,7 +203,7 @@ func OnMove(repo *Repository, event *fsbroker.FSEvent) error {
 	_fileToCreateAtRepo := filepath.Join(repo.Path, baseFilePath)
 	_dirPath := filepath.Dir(_fileToCreateAtRepo)
 
-	exists = directoryExists(_fileToCreateAtRepo)
+	exists = utils.DirectoryExists(_fileToCreateAtRepo)
 	if !exists {
 		fmt.Println("directory does not exist, creating it")
 		err = os.MkdirAll(_dirPath, 0755)
@@ -201,13 +212,13 @@ func OnMove(repo *Repository, event *fsbroker.FSEvent) error {
 		}
 	}
 
-	if fileExists(_fileToCreateAtRepo) {
+	if utils.FileExists(_fileToCreateAtRepo) {
 		err := os.Remove(_fileToCreateAtRepo)
 		if err != nil {
 			return err
 		}
 	}
-	err = fs.NewFsService("").Replicate.CreateHardlink(event.Path, _dirPath)
+	err = fs.NewFsService().Replicate.CreateHardlink(event.Path, _dirPath)
 	if err != nil {
 		fmt.Println("error creating hardlink: ", err)
 		return err

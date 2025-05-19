@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/renatonmag/version-ctrls-cli/pkg/config"
+	"github.com/renatonmag/version-ctrls-cli/pkg/utils"
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
@@ -18,33 +20,35 @@ type FsService struct {
 }
 
 type IgnoreService struct {
-	filePath string
-	matcher  *ignore.GitIgnore
+	filePath  string
+	matcher   *ignore.GitIgnore
+	appConfig *config.ApplicationConfig
 }
 
-func NewFsService(ignorePath string) *FsService {
-	if ignorePath == "" {
-		return &FsService{
-			Replicate: &ReplicateDir{
-				ignore: nil,
-			},
-		}
-	}
+func NewFsService() *FsService {
 	return &FsService{
 		Replicate: &ReplicateDir{
-			ignore: NewIgnoreService(ignorePath),
+			ignore: NewIgnoreService(),
 		},
 	}
 }
 
-func NewIgnoreService(filePath string) *IgnoreService {
-	ignore := &IgnoreService{
-		filePath: filePath,
+func NewIgnoreService() *IgnoreService {
+	appConfig, err := config.LoadConfig()
+	if err != nil {
+		fmt.Printf("error loading config: %v\n", err)
 	}
-	ignore.CompileIgnoreLines(ignore.filePath)
+	ignore := &IgnoreService{
+		appConfig: appConfig,
+	}
+	ignoreExists := utils.FileExists(ignore.filePath)
+	if !ignoreExists {
+		ignore.compileIgnoreLines(ignore.filePath)
+	}
 	return ignore
 }
-func (i *IgnoreService) CompileIgnoreLines(filePath string) {
+
+func (i *IgnoreService) compileIgnoreLines(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		// If the file doesn't exist, use an empty matcher

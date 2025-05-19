@@ -22,4 +22,5 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/add-remote", addRemote)
 	app.Post("/update-remote", updateRemote)
 	app.Post("/push", push)
+	app.Post("/get-config", getConfig)
 }

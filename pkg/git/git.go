@@ -3,39 +3,47 @@ package git
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	appconfig "github.com/renatonmag/version-ctrls-cli/pkg/config"
 )
 
 // Repository wraps a go-git repository
-type Repository struct {
+type LocalRepository struct {
 	repo           *git.Repository
 	Path           string
 	MainRepoBranch string
+	appConfig      *appconfig.ApplicationConfig
 }
 
 // NewRepository creates a new Repository instance
-func NewRepository(path string) (*Repository, error) {
-	parentRepoPath := GetParentRepoPath(path)
-	if parentRepoPath == "" {
-		return nil, fmt.Errorf("no parent git repository found")
-	}
-	fileContent, err := os.ReadFile(filepath.Join(parentRepoPath, ".git", "HEAD"))
+func NewRepository(path string) (*LocalRepository, error) {
+	// parentRepoPath := GetParentRepoPath(path)
+	// if parentRepoPath == "" {
+	// 	return nil, fmt.Errorf("no parent git repository found")
+	// }
+	// _, err := os.ReadFile(filepath.Join(parentRepoPath, ".git", "HEAD"))
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error reading file %s: %w", path, err)
+	// }
+
+	appConfig, err := appconfig.LoadConfig()
 	if err != nil {
-		return nil, fmt.Errorf("error reading file %s: %w", path, err)
+		return nil, fmt.Errorf("error loading config: %w", err)
 	}
-	return &Repository{
+	return &LocalRepository{
 		Path:           path,
-		MainRepoBranch: GetLongName(string(fileContent)),
+		MainRepoBranch: "",
+		appConfig:      appConfig,
 	}, nil
 }
 
-func (repo *Repository) SetMainRepoBranch(branch string) {
+func (repo *LocalRepository) SetMainRepoBranch(branch string) {
 	repo.MainRepoBranch = GetLongName(branch)
 }
 
@@ -62,7 +70,7 @@ func RemoveDirectory(path string) error {
 
 // Open opens a git repository at the specified path.
 // Returns an error if the opening fails.
-func (repo *Repository) Open() error {
+func (repo *LocalRepository) Open() error {
 	repository, err := git.PlainOpen(repo.Path)
 	if err != nil {
 		return fmt.Errorf("failed to open git repository: %w", err)
@@ -73,7 +81,7 @@ func (repo *Repository) Open() error {
 
 // CreateBranch creates a new branch with the given name.
 // Returns an error if the creation fails.
-func (repo *Repository) CreateBranch(branchName string, srcBranch string) error {
+func (repo *LocalRepository) CreateBranch(branchName string, srcBranch string) error {
 	// Get the HEAD reference
 	headRef, err := repo.repo.Head()
 	if err != nil {
@@ -111,7 +119,7 @@ func (repo *Repository) CreateBranch(branchName string, srcBranch string) error 
 
 // DeleteBranch deletes a branch with the given name.
 // Returns an error if the branch doesn't exist or if the deletion fails.
-func (repo *Repository) DeleteBranch(branchName string) error {
+func (repo *LocalRepository) DeleteBranch(branchName string) error {
 	branchRefName := plumbing.NewBranchReferenceName(branchName)
 
 	// Check if the branch exists
@@ -134,7 +142,7 @@ func (repo *Repository) DeleteBranch(branchName string) error {
 
 // RenameBranch renames a branch from oldName to newName.
 // Returns an error if the source branch doesn't exist, the target branch already exists, or the operation fails.
-func (repo *Repository) RenameBranch(oldName, newName string) error {
+func (repo *LocalRepository) RenameBranch(oldName, newName string) error {
 	err := repo.CheckoutBranch("master")
 	if err != nil {
 		return fmt.Errorf("failed to checkout branch '%s': %w", oldName, err)
@@ -174,7 +182,7 @@ func (repo *Repository) RenameBranch(oldName, newName string) error {
 	return nil
 }
 
-func (repo *Repository) CheckoutBranch(branchRef string) error {
+func (repo *LocalRepository) CheckoutBranch(branchRef string) error {
 	branchRefName := plumbing.NewBranchReferenceName(branchRef)
 	wt, err := repo.repo.Worktree()
 	if err != nil {
@@ -193,7 +201,7 @@ func (repo *Repository) CheckoutBranch(branchRef string) error {
 // CommitToBranch creates a commit on the specified branch without checking it out.
 // It adds the specified file to the commit.
 // Returns the commit hash as a string or an error if the operation fails.
-func (repo *Repository) CommitToBranch(branchName, filePath, commitMessage string, empty bool) (string, error) {
+func (repo *LocalRepository) CommitToBranch(branchName, filePath, commitMessage string, empty bool) (string, error) {
 	// Get the branch reference
 	branchRefName := plumbing.NewBranchReferenceName(branchName)
 	branchRef, err := repo.repo.Reference(branchRefName, true)
@@ -243,7 +251,7 @@ func (repo *Repository) CommitToBranch(branchName, filePath, commitMessage strin
 // CommitToBranch creates a commit on the specified branch without checking it out.
 // It adds the specified file to the commit.
 // Returns the commit hash as a string or an error if the operation fails.
-func (repo *Repository) CommitAll(branchName, commitMessage string) (string, error) {
+func (repo *LocalRepository) CommitAll(branchName, commitMessage string) (string, error) {
 	// Check if the branch is currently checked out
 	headRef, err := repo.repo.Head()
 	if err != nil {
@@ -301,18 +309,22 @@ func (repo *Repository) CommitAll(branchName, commitMessage string) (string, err
 
 // BranchExists checks if a branch with the given name exists in the repository.
 // Returns true if the branch exists, false otherwise.
-func (repo *Repository) BranchExists(branchName string) bool {
+func (repo *LocalRepository) BranchExists(branchName string) bool {
 	branchRefName := plumbing.NewBranchReferenceName(branchName)
 	_, err := repo.repo.Reference(branchRefName, false)
 	return err == nil
 }
 
-func (repo *Repository) Push(remoteName string) error {
+func (repo *LocalRepository) Push(remoteName string) error {
 	if repo.repo == nil {
 		return fmt.Errorf("repository is not open")
 	}
 	err := repo.repo.Push(&git.PushOptions{
 		RemoteName: remoteName,
+		Auth: &http.BasicAuth{
+			Username: repo.appConfig.Credentials.Username,
+			Password: repo.appConfig.Credentials.Password,
+		},
 	})
 	if err != nil {
 		if err == git.NoErrAlreadyUpToDate {
@@ -325,7 +337,7 @@ func (repo *Repository) Push(remoteName string) error {
 
 // AddRemote adds a new remote to the repository with the given name and URL.
 // Returns an error if the remote already exists or if the operation fails.
-func (repo *Repository) AddRemote(name, url string) error {
+func (repo *LocalRepository) AddRemote(name, url string) error {
 	if repo.repo == nil {
 		return fmt.Errorf("repository is not open")
 	}
@@ -340,7 +352,7 @@ func (repo *Repository) AddRemote(name, url string) error {
 }
 
 // UpdateRemote updates the URL of an existing remote.
-func (repo *Repository) UpdateRemote(name, newURL string) error {
+func (repo *LocalRepository) UpdateRemote(name, newURL string) error {
 	if repo.repo == nil {
 		return fmt.Errorf("repository is not open")
 	}
@@ -359,7 +371,7 @@ func (repo *Repository) UpdateRemote(name, newURL string) error {
 }
 
 // RemoveRemote removes a remote from the repository.
-func (repo *Repository) RemoveRemote(name string) error {
+func (repo *LocalRepository) RemoveRemote(name string) error {
 	if repo.repo == nil {
 		return fmt.Errorf("repository is not open")
 	}
