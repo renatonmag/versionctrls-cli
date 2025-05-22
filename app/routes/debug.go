@@ -105,20 +105,17 @@ type ReproduceWithHardlinksRequest struct {
 // 	return c.SendString("Hardlinks reproduced")
 // }
 
-type CleanDirectoryRequest struct {
+type CreateDirectoryStructureRequest struct {
 	Path string `json:"path"`
 }
 
-func cleanDirectory(c *fiber.Ctx) error {
-	var request CleanDirectoryRequest
+func createDirectoryStructure(c *fiber.Ctx) error {
+	var request CreateDirectoryStructureRequest
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 	}
-	err := fs.NewFsService().Replicate.CleanWorkingTree(request.Path)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
-	}
-	return c.SendString("Directory cleaned")
+	folder := fs.CreateDirectoryStructure(request.Path)
+	return c.JSON(folder)
 }
 
 type CommitFileOnChangeRequest struct {

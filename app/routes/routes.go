@@ -8,7 +8,7 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/init-repo", initRepo)
 	app.Post("/create-branch", createBranch)
 	app.Post("/delete-branch", deleteBranch)
-	app.Post("/clean-directory", cleanDirectory)
+	app.Post("/create-directory-structure", createDirectoryStructure)
 	app.Post("/diff-dirs", diffDirs)
 	app.Post("/get-ignore-service", getIgnoreService)
 	app.Post("/file-map", fileMap)
